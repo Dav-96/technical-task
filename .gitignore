@@ -78,5 +78,3 @@ app/dist/
 app/build/
 *.log
 Claude.md
-quickstart.md
-docs/

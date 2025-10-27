@@ -62,9 +62,9 @@ module "vpc" {
 module "iam" {
   source = "../../modules/iam"
 
-  project_id  = var.project_id
-  environment = var.environment
-  app_name    = var.app_name
+  project_id        = var.project_id
+  service_accounts  = var.service_accounts
+  sa_impersonations = var.sa_impersonations
 
   depends_on = [google_project_service.required_apis]
 }
@@ -72,10 +72,8 @@ module "iam" {
 # Secret Manager for DB credentials
 module "secrets" {
   source = "../../modules/secrets"
-
   project_id  = var.project_id
   environment = var.environment
-
   depends_on = [google_project_service.required_apis]
 }
 

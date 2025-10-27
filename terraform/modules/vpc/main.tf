@@ -60,7 +60,7 @@ resource "google_vpc_access_connector" "main" {
   network       = google_compute_network.main.name
 
   # e2-micro for connector (cost optimization)
-  machine_type = "e2-micro"
+  machine_type  = "e2-micro"
   min_instances = 2
   max_instances = 3
 }

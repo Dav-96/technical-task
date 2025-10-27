@@ -89,3 +89,60 @@ variable "vpc_cidr" {
   type        = string
   default     = "10.0.0.0/24"
 }
+
+variable "service_accounts" {
+  description = "Service accounts configuration with their IAM roles"
+  type = map(object({
+    account_id   = string
+    display_name = string
+    description  = string
+    roles        = list(string)
+  }))
+  default = {
+    vm = {
+      account_id   = "postgres-vm-sa"
+      display_name = "PostgreSQL VM Service Account"
+      description  = "Service account for Compute Engine VM running PostgreSQL"
+      roles = [
+        "roles/logging.logWriter",
+        "roles/monitoring.metricWriter",
+        "roles/artifactregistry.reader"
+      ]
+    }
+    cloudrun = {
+      account_id   = "app-cloudrun-sa"
+      display_name = "Cloud Run Service Account"
+      description  = "Service account for Cloud Run application"
+      roles = [
+        "roles/logging.logWriter",
+        "roles/monitoring.metricWriter",
+        "roles/cloudtrace.agent",
+        "roles/secretmanager.secretAccessor"
+      ]
+    }
+    cicd = {
+      account_id   = "cicd-github-sa"
+      display_name = "CI/CD Service Account"
+      description  = "Service account for GitHub Actions CI/CD pipeline"
+      roles = [
+        "roles/artifactregistry.writer",
+        "roles/run.developer",
+        "roles/secretmanager.secretAccessor"
+      ]
+    }
+  }
+}
+
+variable "sa_impersonations" {
+  description = "Service account impersonation permissions"
+  type = map(object({
+    source_sa = string
+    target_sa = string
+  }))
+  default = {
+    cicd_can_use_cloudrun = {
+      source_sa = "cicd"
+      target_sa = "cloudrun"
+    }
+  }
+}

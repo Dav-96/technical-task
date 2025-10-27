@@ -17,7 +17,7 @@ resource "google_cloud_run_v2_service" "app" {
     }
 
     scaling {
-      min_instance_count = 0  # Scale to zero for cost savings
+      min_instance_count = 0 # Scale to zero for cost savings
       max_instance_count = 10
     }
 

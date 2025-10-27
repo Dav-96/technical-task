@@ -50,7 +50,7 @@ resource "google_monitoring_alert_policy" "high_5xx_rate" {
     display_name = "5xx error rate exceeds ${var.alert_5xx_threshold}%"
 
     condition_threshold {
-      filter          = <<-EOT
+      filter = <<-EOT
         resource.type="cloud_run_revision"
         AND resource.labels.service_name="${var.cloud_run_service_name}"
         AND metric.type="run.googleapis.com/request_count"
@@ -88,7 +88,7 @@ resource "google_monitoring_alert_policy" "high_5xx_rate" {
   }
 
   documentation {
-    content = <<-EOT
+    content   = <<-EOT
       ## High 5xx Error Rate Alert
 
       The ${var.cloud_run_service_name} service is experiencing a high rate of 5xx errors (>${var.alert_5xx_threshold}%).
@@ -168,7 +168,7 @@ resource "google_monitoring_alert_policy" "high_latency" {
   }
 
   documentation {
-    content = <<-EOT
+    content   = <<-EOT
       ## High Latency Alert
 
       The ${var.cloud_run_service_name} service is experiencing high p95 latency (>${var.alert_latency_threshold_ms}ms).
@@ -219,8 +219,8 @@ resource "google_monitoring_alert_policy" "uptime_check_failure" {
         AND metric.labels.check_id="${google_monitoring_uptime_check_config.app_uptime.uptime_check_id}"
       EOT
 
-      duration   = "60s"
-      comparison = "COMPARISON_LT"
+      duration        = "60s"
+      comparison      = "COMPARISON_LT"
       threshold_value = 1
 
       aggregations {
@@ -245,7 +245,7 @@ resource "google_monitoring_alert_policy" "uptime_check_failure" {
   }
 
   documentation {
-    content = <<-EOT
+    content   = <<-EOT
       ## Application Downtime Alert
 
       The uptime check for ${var.domain} has failed.
