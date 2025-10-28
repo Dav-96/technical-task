@@ -1,3 +1,17 @@
+# Persistent disk for PostgreSQL data (survives VM deletion)
+resource "google_compute_disk" "postgres_data" {
+  name = "${var.environment}-postgres-data-disk"
+  type = "pd-standard"
+  zone = var.zone
+  size = var.data_disk_size_gb
+
+  labels = {
+    environment = var.environment
+    purpose     = "postgres-data"
+    managed_by  = "terraform"
+  }
+}
+
 # Compute Engine Instance for PostgreSQL
 resource "google_compute_instance" "postgres_vm" {
   name         = "${var.environment}-postgres-vm"
@@ -13,6 +27,13 @@ resource "google_compute_instance" "postgres_vm" {
       size  = var.disk_size_gb
       type  = "pd-standard" # Standard persistent disk for Always Free
     }
+  }
+
+  # Attach persistent data disk for PostgreSQL
+  attached_disk {
+    source      = google_compute_disk.postgres_data.id
+    device_name = "postgres-data"
+    mode        = "READ_WRITE"
   }
 
   # Network configuration - INTERNAL IP ONLY
@@ -48,9 +69,30 @@ resource "google_compute_instance" "postgres_vm" {
       systemctl enable docker
       systemctl start docker
 
-      # Create directory for PostgreSQL data
-      mkdir -p /var/lib/postgresql/data
-      chmod 700 /var/lib/postgresql/data
+      # Format and mount persistent disk for PostgreSQL data
+      DEVICE_NAME="/dev/disk/by-id/google-postgres-data"
+      MOUNT_POINT="/mnt/postgres-data"
+
+      # Check if disk is already formatted
+      if ! blkid $DEVICE_NAME; then
+        echo "Formatting persistent disk..."
+        mkfs.ext4 -F $DEVICE_NAME
+      fi
+
+      # Create mount point
+      mkdir -p $MOUNT_POINT
+
+      # Mount the disk
+      mount $DEVICE_NAME $MOUNT_POINT
+
+      # Add to fstab for automatic mounting on reboot
+      if ! grep -q "$DEVICE_NAME" /etc/fstab; then
+        echo "$DEVICE_NAME $MOUNT_POINT ext4 defaults 0 2" >> /etc/fstab
+      fi
+
+      # Create PostgreSQL data directory on persistent disk
+      mkdir -p $MOUNT_POINT/data
+      chmod 700 $MOUNT_POINT/data
 
       # Log completion
       echo "VM initialization complete" | tee /var/log/startup-complete.log

@@ -30,6 +30,12 @@ variable "disk_size_gb" {
   default     = 30
 }
 
+variable "data_disk_size_gb" {
+  description = "Persistent data disk size in GB for PostgreSQL"
+  type        = number
+  default     = 10
+}
+
 variable "network_id" {
   description = "VPC network ID"
   type        = string
