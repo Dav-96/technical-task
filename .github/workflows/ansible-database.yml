@@ -1,0 +1,64 @@
+name: Setup Database
+
+on:
+  workflow_dispatch:
+    inputs:
+      action:
+        description: 'Action to perform'
+        required: true
+        default: 'setup'
+        type: choice
+        options:
+          - setup
+          - restart
+          - status
+
+env:
+  PROJECT_ID: test-dav-390413
+  ZONE: us-west1-a
+  VM_NAME: dev-postgres-vm
+
+jobs:
+  run-ansible:
+    name: Run Ansible Playbook
+    runs-on: ubuntu-latest
+
+    permissions:
+      contents: read
+      id-token: write
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Setup Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+
+      - name: Install Ansible
+        run: |
+          pip install ansible
+
+      - name: Authenticate to Google Cloud
+        uses: google-github-actions/auth@v2
+        with:
+          workload_identity_provider: ${{ secrets.WIF_PROVIDER }}
+          service_account: ${{ secrets.WIF_SERVICE_ACCOUNT }}
+
+      - name: Set up Cloud SDK
+        uses: google-github-actions/setup-gcloud@v2
+
+      - name: Run Ansible Playbook
+        if: github.event.inputs.action == 'setup'
+        run: |
+          cd ansible
+          ansible-playbook -i inventory/hosts.ini playbooks/setup-postgres.yml
+
+      - name: Check Database Status
+        run: |
+          gcloud compute ssh ${{ env.VM_NAME }} \
+            --zone=${{ env.ZONE }} \
+            --project=${{ env.PROJECT_ID }} \
+            --tunnel-through-iap \
+            --command="sudo docker ps | grep postgres"

@@ -1,0 +1,109 @@
+name: Deploy Application
+
+on:
+  push:
+    branches:
+      - main
+    paths:
+      - 'app/**'
+      - 'ansible/**'
+      - '.github/workflows/deploy-app.yml'
+  workflow_dispatch:
+
+env:
+  PROJECT_ID: test-dav-390413
+  REGION: us-west1
+  ZONE: us-west1-a
+  SERVICE_NAME: hello-db-app
+  REPOSITORY: hello-db-app-repo
+  VM_NAME: dev-postgres-vm
+
+jobs:
+  build-and-deploy:
+    name: Build and Deploy Application
+    runs-on: ubuntu-latest
+
+    permissions:
+      contents: read
+      id-token: write
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Authenticate to Google Cloud
+        uses: google-github-actions/auth@v2
+        with:
+          workload_identity_provider: ${{ secrets.WIF_PROVIDER }}
+          service_account: ${{ secrets.WIF_SERVICE_ACCOUNT }}
+
+      - name: Set up Cloud SDK
+        uses: google-github-actions/setup-gcloud@v2
+
+      - name: Configure Docker for Artifact Registry
+        run: gcloud auth configure-docker ${{ env.REGION }}-docker.pkg.dev
+
+      - name: Build and Push Docker Image
+        run: |
+          cd app
+          IMAGE_TAG=${{ env.REGION }}-docker.pkg.dev/${{ env.PROJECT_ID }}/${{ env.REPOSITORY }}/${{ env.SERVICE_NAME }}
+
+          docker build -t ${IMAGE_TAG}:${{ github.sha }} .
+          docker tag ${IMAGE_TAG}:${{ github.sha }} ${IMAGE_TAG}:latest
+
+          docker push ${IMAGE_TAG}:${{ github.sha }}
+          docker push ${IMAGE_TAG}:latest
+
+      - name: Deploy to Cloud Run
+        run: |
+          gcloud run deploy ${{ env.SERVICE_NAME }} \
+            --image ${{ env.REGION }}-docker.pkg.dev/${{ env.PROJECT_ID }}/${{ env.REPOSITORY }}/${{ env.SERVICE_NAME }}:${{ github.sha }} \
+            --region ${{ env.REGION }} \
+            --project ${{ env.PROJECT_ID }} \
+            --platform managed \
+            --allow-unauthenticated \
+            --service-account app-cloudrun-sa@${{ env.PROJECT_ID }}.iam.gserviceaccount.com \
+            --vpc-connector dev-vpc-connector \
+            --vpc-egress private-ranges-only \
+            --set-env-vars DB_HOST=10.0.0.2,DB_PORT=5432,DB_NAME=appdb,DB_USER=postgres,GCP_PROJECT_ID=${{ env.PROJECT_ID }} \
+            --max-instances 10 \
+            --min-instances 0 \
+            --memory 512Mi \
+            --cpu 1 \
+            --timeout 300
+
+      - name: Get Service URL
+        id: get-url
+        run: |
+          SERVICE_URL=$(gcloud run services describe ${{ env.SERVICE_NAME }} \
+            --region ${{ env.REGION }} \
+            --project ${{ env.PROJECT_ID }} \
+            --format 'value(status.url)')
+          echo "url=$SERVICE_URL" >> $GITHUB_OUTPUT
+          echo "✅ Deployed to: $SERVICE_URL"
+
+      - name: Health Check
+        run: |
+          echo "Testing health endpoint..."
+          RESPONSE=$(curl -s ${{ steps.get-url.outputs.url }}/health)
+          echo "Response: $RESPONSE"
+
+          if echo "$RESPONSE" | grep -q "healthy"; then
+            echo "✅ Health check passed!"
+          else
+            echo "❌ Health check failed!"
+            exit 1
+          fi
+
+      - name: Test API Endpoint
+        run: |
+          echo "Testing API endpoint..."
+          RESPONSE=$(curl -s ${{ steps.get-url.outputs.url }}/api)
+          echo "Response: $RESPONSE"
+
+          if echo "$RESPONSE" | grep -q "message"; then
+            echo "✅ API test passed!"
+          else
+            echo "❌ API test failed!"
+            exit 1
+          fi
