@@ -1,0 +1,14 @@
+plugin: gcp_compute
+projects:
+  - test-dav-390413
+filters:
+  - name = dev-postgres-vm
+auth_kind: application
+scopes:
+  - https://www.googleapis.com/auth/compute
+keyed_groups:
+  - key: labels
+    prefix: label
+compose:
+  ansible_host: networkInterfaces[0].networkIP
+  ansible_ssh_common_args: '-o ProxyCommand="gcloud compute start-iap-tunnel dev-postgres-vm %p --listen-on-stdin --zone=us-west1-a --project=test-dav-390413"'

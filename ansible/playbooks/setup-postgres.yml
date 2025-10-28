@@ -1,0 +1,90 @@
+---
+- name: Setup PostgreSQL in Docker
+  hosts: postgres
+  gather_facts: no
+  vars:
+    postgres_version: "16-alpine"
+    postgres_container_name: "postgres"
+    postgres_port: 5432
+    postgres_data_dir: "/mnt/postgres-data/data"
+    postgres_user: "postgres"
+    postgres_db: "appdb"
+
+  tasks:
+    - name: Get database password from GCP Secret Manager
+      shell: |
+        gcloud secrets versions access latest --secret=dev-db-password --project={{ target_project }}
+      register: db_password_result
+      changed_when: false
+
+    - name: Set password variable
+      set_fact:
+        postgres_password: "{{ db_password_result.stdout }}"
+      no_log: true
+
+    - name: Ensure Docker is running
+      shell: |
+        gcloud compute ssh {{ target_vm }} \
+          --zone={{ target_zone }} \
+          --project={{ target_project }} \
+          --tunnel-through-iap \
+          --command="sudo systemctl enable docker && sudo systemctl start docker"
+      changed_when: false
+
+    - name: Pull PostgreSQL Docker image
+      shell: |
+        gcloud compute ssh {{ target_vm }} \
+          --zone={{ target_zone }} \
+          --project={{ target_project }} \
+          --tunnel-through-iap \
+          --command="sudo docker pull postgres:{{ postgres_version }}"
+
+    - name: Stop existing PostgreSQL container if running
+      shell: |
+        gcloud compute ssh {{ target_vm }} \
+          --zone={{ target_zone }} \
+          --project={{ target_project }} \
+          --tunnel-through-iap \
+          --command="sudo docker stop {{ postgres_container_name }} || true && sudo docker rm {{ postgres_container_name }} || true"
+      changed_when: false
+      ignore_errors: yes
+
+    - name: Run PostgreSQL container
+      shell: |
+        gcloud compute ssh {{ target_vm }} \
+          --zone={{ target_zone }} \
+          --project={{ target_project }} \
+          --tunnel-through-iap \
+          --command="sudo docker run -d \
+            --name {{ postgres_container_name }} \
+            --restart always \
+            -p {{ postgres_port }}:5432 \
+            -e POSTGRES_USER={{ postgres_user }} \
+            -e POSTGRES_PASSWORD={{ postgres_password }} \
+            -e POSTGRES_DB={{ postgres_db }} \
+            -v {{ postgres_data_dir }}:/var/lib/postgresql/data \
+            postgres:{{ postgres_version }}"
+      no_log: true
+
+    - name: Wait for PostgreSQL to be ready
+      shell: |
+        gcloud compute ssh {{ target_vm }} \
+          --zone={{ target_zone }} \
+          --project={{ target_project }} \
+          --tunnel-through-iap \
+          --command="sudo docker exec {{ postgres_container_name }} pg_isready -U {{ postgres_user }}"
+      register: pg_ready
+      retries: 10
+      delay: 3
+      until: pg_ready.rc == 0
+      changed_when: false
+
+    - name: Display connection information
+      debug:
+        msg:
+          - "PostgreSQL is running successfully!"
+          - "Internal IP: 10.0.0.2"
+          - "Port: {{ postgres_port }}"
+          - "Database: {{ postgres_db }}"
+          - "User: {{ postgres_user }}"
+          - "Connect via IAP tunnel: gcloud compute start-iap-tunnel {{ target_vm }} 5432 --local-host-port=localhost:5432 --zone={{ target_zone }}"
