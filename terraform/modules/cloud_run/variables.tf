@@ -27,3 +27,9 @@ variable "environment" {
   description = "Environment name"
   type        = string
 }
+
+variable "custom_domain" {
+  description = "Custom domain for Cloud Run service"
+  type        = string
+  default     = ""
+}

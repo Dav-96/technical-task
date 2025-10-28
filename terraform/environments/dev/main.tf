@@ -115,6 +115,7 @@ module "cloud_run" {
   service_account  = module.iam.cloudrun_service_account_email
   vpc_connector_id = module.vpc.vpc_connector_id
   environment      = var.environment
+  custom_domain    = var.domain
 
   depends_on = [
     module.vpc,
@@ -122,6 +123,17 @@ module "cloud_run" {
     module.secrets,
     google_artifact_registry_repository.app
   ]
+}
+
+# Cloudflare CDN and DNS
+module "cloudflare" {
+  source = "../../modules/cloudflare"
+
+  domain            = var.domain
+  cloud_run_url     = replace(module.cloud_run.service_url, "https://", "")
+  allowed_countries = var.allowed_countries
+
+  depends_on = [module.cloud_run]
 }
 
 # Monitoring and Alerting

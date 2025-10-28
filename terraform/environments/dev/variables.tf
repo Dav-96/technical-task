@@ -32,19 +32,14 @@ variable "subdomain" {
   default     = "app"
 }
 
-# variable "cloudflare_zone_id" {
-#   description = "Cloudflare Zone ID"
-#   type        = string
-# }
-
-# variable "cloudflare_api_token" {
-#   description = "Cloudflare API Token"
-#   type        = string
-#   sensitive   = true
-# }
+variable "cloudflare_api_token" {
+  description = "Cloudflare API Token"
+  type        = string
+  sensitive   = true
+}
 
 variable "allowed_countries" {
-  description = "List of country codes allowed to access the application"
+  description = "List of country codes allowed to access (all others blocked)"
   type        = list(string)
   default     = ["ES", "AM"] # Spain and Armenia
 }
