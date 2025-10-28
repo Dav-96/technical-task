@@ -11,12 +11,6 @@ terraform {
       version = "~> 4.0"
     }
   }
-
-  # Uncomment for remote state storage
-  # backend "gcs" {
-  #   bucket = "your-terraform-state-bucket"
-  #   prefix = "terraform/state"
-  # }
 }
 
 provider "google" {
