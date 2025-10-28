@@ -16,15 +16,6 @@ resource "google_compute_subnetwork" "private" {
   # Enable Private Google Access for services without public IPs
   private_ip_google_access = true
 
-  # Secondary IP ranges for GKE if needed in future
-  # secondary_ip_range {
-  #   range_name    = "pods"
-  #   ip_cidr_range = "10.1.0.0/16"
-  # }
-  # secondary_ip_range {
-  #   range_name    = "services"
-  #   ip_cidr_range = "10.2.0.0/16"
-  # }
 }
 
 # Cloud Router for NAT
