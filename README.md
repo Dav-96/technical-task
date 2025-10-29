@@ -160,7 +160,27 @@ terraform apply -auto-approve
 # Outputs: VM IP, Cloud Run URL, IAP tunnel command
 ```
 
-### 5. Deploy Database
+### 5. Set Database Password
+
+**CRITICAL**: This step must be completed before deploying the database or application!
+
+```bash
+# Generate a secure password or use your own
+DB_PASSWORD="your-secure-password-here"
+
+# Store password in Secret Manager
+echo -n "$DB_PASSWORD" | gcloud secrets versions add dev-db-password \
+  --data-file=- \
+  --project=YOUR_PROJECT_ID
+
+# Verify it was set correctly
+gcloud secrets versions access latest --secret=dev-db-password \
+  --project=YOUR_PROJECT_ID
+```
+
+> **Note**: Terraform creates Secret Manager secrets with placeholder values. Only the database password needs to be manually set. Other database connection details (host, port, database name, user) are configured as environment variables in the deployment pipeline.
+
+### 6. Deploy Database
 
 ```bash
 cd ../../../ansible
@@ -170,12 +190,13 @@ ansible-playbook -i inventory/hosts.ini playbooks/setup-postgres.yml \
   -e target_zone=us-west1-a
 ```
 
-### 6. Deploy Application (GitHub Actions)
+### 7. Deploy Application (GitHub Actions)
 
 Push to `main` branch triggers:
-1. **terraform.yml**: Infrastructure changes
+1. **terraform.yml**: Infrastructure changes (includes domain mapping + SSL cert provisioning via Terraform)
 2. **deploy-app.yml**: Build → Artifact Registry → Cloud Run
-3. Domain mapping + SSL certificate provisioning
+
+**Note**: Domain mapping and SSL certificate are managed by Terraform (`google_cloud_run_domain_mapping` resource). Certificate provisioning can take 15-60 minutes after first apply.
 
 ## Developer Database Access
 
@@ -266,18 +287,22 @@ git push origin main
 ## Cleanup & Cost Prevention
 
 ```bash
-# Destroy all infrastructure
+# Destroy all infrastructure (including domain mapping, managed by Terraform)
 cd terraform/environments/dev
+source .envrc  # Load Cloudflare token
 terraform destroy -auto-approve
 
 # Verify resources deleted
 gcloud compute instances list --project=YOUR_PROJECT_ID
 gcloud run services list --project=YOUR_PROJECT_ID
 gcloud compute disks list --project=YOUR_PROJECT_ID
+gcloud beta run domain-mappings list --region=us-west1 --project=YOUR_PROJECT_ID
 
-# Delete GCS state bucket (optional)
+# Delete GCS state bucket (optional, if you want complete cleanup)
 gsutil -m rm -r gs://YOUR_PROJECT_ID-terraform-state
 ```
+
+**Note**: All resources including Cloud Run domain mapping are now managed by Terraform, so `terraform destroy` handles everything.
 
 ## Cloudflare Configuration
 
