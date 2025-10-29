@@ -1,251 +1,289 @@
 # GCP Cloud Run + PostgreSQL Infrastructure
 
-This repository contains Infrastructure as Code (IaC) for deploying a Cloud Run application connected to a PostgreSQL database running on a Compute Engine VM with Cloudflare CDN integration.
+Production-ready infrastructure for a Flask application with PostgreSQL database, deployed on GCP with Cloudflare CDN and comprehensive monitoring.
 
 ## Architecture
 
 ```
-
+Internet → Cloudflare (CDN/Geo-restriction) → Cloud Run (Flask App)
+                                                     ↓
+                                            VPC Serverless Connector
+                                                     ↓
+           Private VPC (10.0.0.0/24) ← Cloud NAT ← Compute Engine VM (PostgreSQL)
 ```
 
-### Components
+**Stack**: Terraform + Ansible + GitHub Actions + Flask + PostgreSQL + Cloudflare
 
-- **Compute Engine VM (e2-micro)**: Hosts PostgreSQL in Docker (internal IP only)
-- **Cloud Run**: Runs the application container with auto-scaling
-- **VPC & Networking**: Private networking with Cloud NAT for outbound traffic
-- **Cloudflare**: CDN, DDoS protection, and geo-restriction (Spain + Armenia)
-- **Cloud Monitoring**: Uptime checks and alerting policies
+## Repository Structure
+
+```
+.
+├── .github/workflows/       # CI/CD pipelines
+│   ├── terraform.yml        # Infrastructure deployment
+│   ├── deploy-app.yml       # Application deployment
+│   └── ansible-database.yml # Database configuration
+├── ansible/
+│   ├── inventory/hosts.ini
+│   └── playbooks/setup-postgres.yml
+├── app/
+│   ├── app.py              # Flask application
+│   ├── Dockerfile          # Single-stage build
+│   └── requirements.txt
+├── terraform/
+│   ├── modules/
+│   │   ├── vpc/            # Network + NAT + Connector
+│   │   ├── iam/            # Service accounts (data-driven)
+│   │   ├── secrets/        # Secret Manager placeholders
+│   │   ├── compute/        # VM + persistent disk
+│   │   ├── cloud_run/      # Cloud Run service + IAM
+│   │   ├── cloudflare/     # DNS + WAF + caching
+│   │   └── monitoring/     # Uptime + alerts
+│   └── environments/dev/
+│       ├── main.tf
+│       ├── variables.tf
+│       ├── terraform.tfvars
+│       ├── backend.tf      # GCS remote state
+│       └── .envrc          # Cloudflare token
+├── CLAUDE.md               # Claude Code usage notes
+└── README.md
+```
+
+## Components
+
+| Component | Technology | Purpose |
+|-----------|-----------|---------|
+| Compute | e2-micro VM (internal IP only) | PostgreSQL 16 in Docker |
+| Application | Cloud Run | Flask app with auto-scaling 0-10 instances |
+| Database | PostgreSQL 16-alpine | Persistent disk (10GB pd-standard) |
+| CDN | Cloudflare | Caching, DDoS protection, geo-restriction |
+| Networking | VPC + Cloud NAT + Serverless Connector | Private connectivity |
+| Monitoring | Cloud Monitoring | Uptime checks + alert policies |
+| CI/CD | GitHub Actions + WIF | Automated deployments |
 
 ## Key Design Decisions
 
-### Infrastructure
-- **VM with internal IP only**: Enhances security by preventing direct internet access
-- **Cloud NAT**: Allows VM to pull Docker images without public IP
-- **VPC with private subnets**: Isolates database traffic
-- **Workload Identity**: Secure service-to-service authentication without key files
-
-### Database Connectivity
-- **PostgreSQL in Docker**: Easier management and version control
-- **Internal-only access**: No public load balancer or external IP
-- **Developer access options**:
-  1. Cloud IAP for TCP forwarding (recommended)
-  2. Cloud Shell with internal connectivity
-  3. Bastion host for persistent connections
-
 ### Security
-- **Least-privilege IAM**: Each service account has minimal required permissions
-- **Secret Manager**: Stores database credentials and sensitive configuration
-- **Cloudflare geo-restriction**: Limits access to Spain and Armenia
-- **Private networking**: Database never exposed to internet
+- **VM internal IP only**: Database isolated from internet, accessed via Cloud IAP
+- **Workload Identity Federation**: No service account keys in GitHub
+- **Secret Manager API**: Credentials fetched at runtime, never hardcoded
+- **Least-privilege IAM**: Data-driven service accounts with minimal roles
+- **Geo-restriction**: Allowlist Spain (ES) + Armenia (AM) via Cloudflare WAF
 
-### Observability
-- **Uptime checks**: Monitor application availability
-- **Alert policies**:
-  - 5xx error rate > [THRESHOLD]% over 5 minutes
-  - p95 latency > [THRESHOLD]ms over 5 minutes
+### Infrastructure
+- **Modular Terraform**: 6 modules (VPC, IAM, Secrets, Compute, Cloud Run, Monitoring)
+- **Data-driven IAM**: Service accounts/roles defined in tfvars, not hardcoded
+- **GCS remote state**: Versioned state in `gs://GCS_BUCKET_NAME`
+- **Persistent disk**: Database survives VM recreation
+
+### Connectivity
+- **Cloud Run → PostgreSQL**: Via VPC Serverless Connector
+- **VM outbound**: Cloud NAT for Docker image pulls
+- **Developer access**: Cloud IAP TCP forwarding (no bastion needed)
+
+## Monitoring Configuration
+
+
+
+**Alert Policies**:
+- **5xx Error Rate**: >5% of requests over 5 minutes → Critical
+- **p95 Latency**: >1000ms over 5 minutes → Warning
+- **Uptime Failure**: Health check fails for 60s → Critical
+
+**Notification**: Email configured in `terraform.tfvars` (`notification_email` variable)
 
 ## Prerequisites
 
-- Google Cloud Platform account with billing enabled
-- Cloudflare account with a domain configured
-- Tools installed:
-  - `terraform` >= 1.5.0
-  - `gcloud` CLI
-  - `ansible` >= 2.14
-  - `docker` (for local testing)
+```bash
+# Required tools
+terraform >= 1.5.0
+gcloud CLI
+ansible >= 2.14
+python 3.9+
 
-## Environment Variables
-
-Create a `terraform/environments/dev/terraform.tfvars` file (not committed):
-
-```hcl
-project_id          = "your-gcp-project-id"
-region              = "us-west1"  # Always Free eligible region
-zone                = "us-west1-a"
-domain              = "yourdomain.com"
-subdomain           = "app"
-cloudflare_zone_id  = "your-cloudflare-zone-id"
-allowed_countries   = ["ES", "YOUR_COUNTRY_CODE"]
-db_password         = "secure-password-here"  # Better: use Secret Manager
+# GCP APIs enabled
+compute.googleapis.com
+run.googleapis.com
+vpcaccess.googleapis.com
+artifactregistry.googleapis.com
+secretmanager.googleapis.com
+monitoring.googleapis.com
+iam.googleapis.com
+iap.googleapis.com
 ```
 
-## Deployment Instructions
+## Quick Start
 
-### 1. Initial Setup
+### 1. Setup GCP Authentication
 
 ```bash
-# Authenticate with GCP
 gcloud auth login
 gcloud auth application-default login
-
-# Set your project
-export PROJECT_ID="your-gcp-project-id"
-gcloud config set project $PROJECT_ID
-
-# Enable required APIs
-gcloud services enable compute.googleapis.com \
-  run.googleapis.com \
-  artifactregistry.googleapis.com \
-  vpcaccess.googleapis.com \
-  secretmanager.googleapis.com \
-  monitoring.googleapis.com
+gcloud config set project YOUR_PROJECT_ID
 ```
 
-### 2. Configure GitHub Secrets
-
-Add these secrets to your GitHub repository:
-
-- `GCP_PROJECT_ID`: Your GCP project ID
-- `GCP_SA_KEY`: Service account key JSON for CI/CD
-- `CLOUDFLARE_API_TOKEN`: Cloudflare API token with DNS edit permissions
-- `CLOUDFLARE_ZONE_ID`: Your Cloudflare zone ID
-- `DB_PASSWORD`: PostgreSQL password
-
-### 3. Deploy Infrastructure
+### 2. Configure Cloudflare Token
 
 ```bash
 cd terraform/environments/dev
-
-# Initialize Terraform
-terraform init
-
-# Review the plan
-terraform plan
-
-# Apply infrastructure
-terraform apply
-
-# Note the outputs (VM IP, Cloud Run URL, etc.)
+echo 'export TF_VAR_cloudflare_api_token="your-token"' > .envrc
+source .envrc
 ```
 
-### 4. Configure Database with Ansible
+### 3. Create GCS Backend
+
+```bash
+gsutil mb -p YOUR_PROJECT_ID -l us-west1 gs://YOUR_PROJECT_ID-terraform-state
+gsutil versioning set on gs://YOUR_PROJECT_ID-terraform-state
+```
+
+### 4. Deploy Infrastructure
+
+```bash
+terraform init
+terraform apply -auto-approve
+
+# Outputs: VM IP, Cloud Run URL, IAP tunnel command
+```
+
+### 5. Deploy Database
 
 ```bash
 cd ../../../ansible
-
-# The inventory is auto-generated from Terraform outputs
-ansible-playbook -i inventory/gcp.yml playbooks/setup-postgres.yml
+ansible-playbook -i inventory/hosts.ini playbooks/setup-postgres.yml \
+  -e target_project=YOUR_PROJECT_ID \
+  -e target_vm=dev-postgres-vm \
+  -e target_zone=us-west1-a
 ```
 
-### 5. Deploy Application via GitHub Actions
+### 6. Deploy Application (GitHub Actions)
 
-Push to the `main` branch to trigger CI/CD:
-- Builds Docker image
-- Pushes to Artifact Registry
-- Deploys to Cloud Run
-- Updates Cloudflare DNS
+Push to `main` branch triggers:
+1. **terraform.yml**: Infrastructure changes
+2. **deploy-app.yml**: Build → Artifact Registry → Cloud Run
+3. Domain mapping + SSL certificate provisioning
 
-## CI/CD Pipeline
+## Developer Database Access
 
-GitHub Actions workflows:
-
-- **terraform.yml**: Validates and applies infrastructure changes
-- **app-deploy.yml**: Builds and deploys application
-- **cloudflare-dns.yml**: Manages DNS records via Cloudflare API
-
-## Developer Access to Database
-
-Since the PostgreSQL VM has no public IP, use one of these methods:
-
-### Option 1: Cloud IAP TCP Forwarding (Recommended)
+### IAP TCP Forwarding (Recommended)
 
 ```bash
-# Forward port 5432 from VM to localhost
-gcloud compute start-iap-tunnel <VM_NAME> 5432 \
+# Forward PostgreSQL port to localhost
+gcloud compute start-iap-tunnel dev-postgres-vm 5432 \
   --local-host-port=localhost:5432 \
-  --zone=<ZONE>
+  --zone=us-west1-a \
+  --project=YOUR_PROJECT_ID
 
-# Connect from your local machine
-psql -h localhost -p 5432 -U postgres -d appdb
+# Connect with psql
+psql -h localhost -p 5432 -U postgres -d postgres
 ```
 
-### Option 2: Cloud Shell
+### Direct SSH
 
 ```bash
-# SSH into VM via internal IP (from Cloud Shell)
-gcloud compute ssh <VM_NAME> --zone=<ZONE> --tunnel-through-iap
+# SSH via IAP
+gcloud compute ssh dev-postgres-vm \
+  --zone=us-west1-a \
+  --tunnel-through-iap \
+  --project=YOUR_PROJECT_ID
 
-# Once on VM
-docker exec -it postgres psql -U postgres -d appdb
+# Access container
+sudo docker exec -it postgres psql -U postgres
 ```
 
-## Monitoring & Alerts
+## CI/CD Workflows
 
-Access monitoring dashboards:
+### Workload Identity Federation Setup (One-time)
 
 ```bash
-# Open Cloud Monitoring
-gcloud monitoring dashboards list
+# Create WIF pool and provider
+gcloud iam workload-identity-pools create github-actions \
+  --location=global --project=YOUR_PROJECT_ID
 
-# View alert policies
-gcloud alpha monitoring policies list
+gcloud iam workload-identity-pools providers create-oidc github \
+  --location=global --workload-identity-pool=github-actions \
+  --issuer-uri=https://token.actions.githubusercontent.com \
+  --attribute-mapping="google.subject=assertion.sub,attribute.repository=assertion.repository" \
+  --project=YOUR_PROJECT_ID
+
+# Bind service account
+gcloud iam service-accounts add-iam-policy-binding \
+  cicd-github-sa@YOUR_PROJECT_ID.iam.gserviceaccount.com \
+  --role=roles/iam.workloadIdentityUser \
+  --member="principalSet://iam.googleapis.com/projects/YOUR_PROJECT_NUMBER/locations/global/workloadIdentityPools/github-actions/attribute.repository/YOUR_GITHUB_USER/YOUR_REPO" \
+  --project=YOUR_PROJECT_ID
 ```
 
-Alert thresholds:
-- **5xx errors**: > X% of requests over 5 minutes
-- **p95 latency**: > Xms over 5 minutes
+### GitHub Secrets Required
+
+```
+WIF_PROVIDER: projects/YOUR_PROJECT_NUMBER/locations/global/workloadIdentityPools/github-actions/providers/github
+WIF_SERVICE_ACCOUNT: cicd-github-sa@YOUR_PROJECT_ID.iam.gserviceaccount.com
+CLOUDFLARE_API_TOKEN: (your cloudflare api token)
+```
 
 ## Rollback Procedures
 
 ### Application Rollback
 
 ```bash
-# List Cloud Run revisions
-gcloud run revisions list --service=<SERVICE_NAME> --region=<REGION>
+# List revisions
+gcloud run revisions list --service=hello-db-app --region=us-west1
 
-# Rollback to previous revision
-gcloud run services update-traffic <SERVICE_NAME> \
-  --to-revisions=<PREVIOUS_REVISION>=100 \
-  --region=<REGION>
+# Route 100% traffic to previous revision
+gcloud run services update-traffic hello-db-app \
+  --to-revisions=PREVIOUS_REVISION=100 \
+  --region=us-west1
 ```
 
 ### Infrastructure Rollback
 
 ```bash
-# Revert to previous Terraform state
-cd terraform/environments/dev
+# Option 1: Terraform state rollback
 terraform state pull > backup.tfstate
-
-# Review git history and checkout previous version
-git checkout <PREVIOUS_COMMIT> -- terraform/
-
-terraform plan
+terraform state push previous-state.tfstate
 terraform apply
+
+# Option 2: Git revert
+git revert <commit-hash>
+git push origin main
 ```
 
-## Cleanup & Destroy
-
-**⚠️ Warning**: This will destroy all resources and data.
+## Cleanup & Cost Prevention
 
 ```bash
 # Destroy all infrastructure
 cd terraform/environments/dev
-terraform destroy
+terraform destroy -auto-approve
 
-# Verify all resources are deleted
-gcloud compute instances list
-gcloud run services list
-gcloud monitoring policies list
+# Verify resources deleted
+gcloud compute instances list --project=YOUR_PROJECT_ID
+gcloud run services list --project=YOUR_PROJECT_ID
+gcloud compute disks list --project=YOUR_PROJECT_ID
+
+# Delete GCS state bucket (optional)
+gsutil -m rm -r gs://YOUR_PROJECT_ID-terraform-state
 ```
 
-## Repository Structure
+## Cloudflare Configuration
 
+**DNS Records** (managed by Terraform):
 ```
-.
-├── .github/
-│   └── workflows/          # GitHub Actions CI/CD pipelines
-├── ansible/
-│   ├── inventory/          # Dynamic inventory for GCP
-│   ├── playbooks/          # Ansible playbooks
-│   └── roles/              # Reusable Ansible roles
-├── app/                    # Application source code
-│   ├── Dockerfile
-│   └── src/
-├── docs/                   # Additional documentation
-├── scripts/                # Helper scripts
-└── terraform/
-    ├── modules/            # Reusable Terraform modules
-    └── environments/
-        └── dev/            # Development environment
+yourdomain.com  A    216.239.32.21  (Proxied)
+yourdomain.com  A    216.239.34.21  (Proxied)
+yourdomain.com  A    216.239.36.21  (Proxied)
+yourdomain.com  A    216.239.38.21  (Proxied)
+www             CNAME yourdomain.com  (Proxied)
+```
 
+Note: These are Google's global anycast IPs for Cloud Run domain mappings
+
+**WAF Rule** (Terraform `cloudflare_ruleset`):
 ```
+Expression: (ip.geoip.country ne "ES" and ip.geoip.country ne "AM")
+Action: Block
+```
+
+**Caching**:
+- `/*`: Cache everything, edge TTL 2h, browser TTL 1h
+- `/api*`: Bypass cache
+- SSL/TLS: Full (not strict, Cloud Run uses Google certs)
