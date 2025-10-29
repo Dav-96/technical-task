@@ -6,7 +6,6 @@ on:
       - main
     paths:
       - 'app/**'
-      - 'ansible/**'
       - '.github/workflows/deploy-app.yml'
   workflow_dispatch:
 
