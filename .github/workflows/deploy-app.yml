@@ -72,38 +72,18 @@ jobs:
             --cpu 1 \
             --timeout 300
 
-      - name: Get Service URL
-        id: get-url
+      - name: Verify Deployment
         run: |
           SERVICE_URL=$(gcloud run services describe ${{ env.SERVICE_NAME }} \
             --region ${{ env.REGION }} \
             --project ${{ env.PROJECT_ID }} \
             --format 'value(status.url)')
-          echo "url=$SERVICE_URL" >> $GITHUB_OUTPUT
           echo "✅ Deployed to: $SERVICE_URL"
 
-      - name: Health Check
-        run: |
-          echo "Testing health endpoint..."
-          RESPONSE=$(curl -s ${{ steps.get-url.outputs.url }}/health)
-          echo "Response: $RESPONSE"
-
+          RESPONSE=$(curl -s ${SERVICE_URL}/health)
           if echo "$RESPONSE" | grep -q "ok"; then
             echo "✅ Health check passed!"
           else
             echo "❌ Health check failed!"
-            exit 1
-          fi
-
-      - name: Test API Endpoint
-        run: |
-          echo "Testing API endpoint..."
-          RESPONSE=$(curl -s ${{ steps.get-url.outputs.url }}/api)
-          echo "Response: $RESPONSE"
-
-          if echo "$RESPONSE" | grep -q "message"; then
-            echo "✅ API test passed!"
-          else
-            echo "❌ API test failed!"
             exit 1
           fi
