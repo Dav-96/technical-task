@@ -1,0 +1,66 @@
+# GCP Configuration
+project_id = "YOUR_PROJECT_ID"        # Replace with your GCP project ID
+region     = "us-west1"
+zone       = "us-west1-a"
+
+# Domain Configuration
+domain = "yourdomain.com"              # Replace with your domain
+
+# Cloudflare Configuration
+# Set CLOUDFLARE_API_TOKEN environment variable: export TF_VAR_cloudflare_api_token="your-api-token"
+
+# Geo-restrictions (allowlist - only these countries can access)
+allowed_countries = ["ES", "AM"] # Spain and Armenia
+
+# Monitoring
+notification_email         = "your-email@example.com"  # Replace with your email
+alert_5xx_threshold        = 5    # 5% of requests
+alert_latency_threshold_ms = 1000 # 1000ms (1 second)
+
+# Application
+app_name = "hello-db-app"
+
+# Service Accounts Configuration
+# Customize service account names and roles as needed
+service_accounts = {
+  vm = {
+    account_id   = "postgres-vm-sa"
+    display_name = "PostgreSQL VM Service Account"
+    description  = "Service account for Compute Engine VM running PostgreSQL"
+    roles = [
+      "roles/logging.logWriter",
+      "roles/monitoring.metricWriter",
+      "roles/artifactregistry.reader"
+    ]
+  }
+  cloudrun = {
+    account_id   = "app-cloudrun-sa"
+    display_name = "Cloud Run Service Account"
+    description  = "Service account for Cloud Run application"
+    roles = [
+      "roles/logging.logWriter",
+      "roles/monitoring.metricWriter",
+      "roles/cloudtrace.agent",
+      "roles/secretmanager.secretAccessor"
+    ]
+  }
+  cicd = {
+    account_id   = "cicd-github-sa"
+    display_name = "CI/CD Service Account"
+    description  = "Service account for GitHub Actions CI/CD pipeline"
+    roles = [
+      "roles/artifactregistry.writer",
+      "roles/run.developer",
+      "roles/secretmanager.secretAccessor"
+    ]
+  }
+}
+
+# Service Account Impersonations
+# Allow CI/CD to deploy as Cloud Run service account
+sa_impersonations = {
+  cicd_can_use_cloudrun = {
+    source_sa = "cicd"
+    target_sa = "cloudrun"
+  }
+}
