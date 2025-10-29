@@ -26,11 +26,8 @@ resource "cloudflare_record" "cloud_run_a" {
   name    = "@"
   content = each.value
   type    = "A"
-  proxied = true
+  proxied = false
   comment = "Cloud Run domain mapping"
-  lifecycle {
-    ignore_changes = [ zone_id ]
-  }
 }
 
 # DNS record for www subdomain
@@ -41,9 +38,6 @@ resource "cloudflare_record" "www" {
   type    = "CNAME"
   proxied = true
   comment = "WWW redirect"
-  lifecycle {
-    ignore_changes = [ zone_id ]
-  }
 }
 
 # Firewall rule for geo-restrictions using WAF Custom Rules (Ruleset API)
@@ -60,9 +54,6 @@ resource "cloudflare_ruleset" "geo_allowlist" {
     expression  = "(ip.geoip.country ne \"ES\" and ip.geoip.country ne \"AM\")"
     enabled     = true
   }
-  lifecycle {
-    ignore_changes = [ zone_id ]
-  }
 }
 
 # Cache rules for better performance
@@ -76,9 +67,6 @@ resource "cloudflare_page_rule" "cache_everything" {
     edge_cache_ttl    = 7200
     browser_cache_ttl = 3600
   }
-  lifecycle {
-    ignore_changes = [ zone_id ]
-  }
 }
 
 # Page rule for API endpoint (no caching)
@@ -89,8 +77,5 @@ resource "cloudflare_page_rule" "api_no_cache" {
 
   actions {
     cache_level = "bypass"
-  }
-  lifecycle {
-    ignore_changes = [ zone_id ]
   }
 }
