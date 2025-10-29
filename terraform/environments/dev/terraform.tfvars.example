@@ -1,10 +1,10 @@
 # GCP Configuration
-project_id = "test-dav-390413"
+project_id = "YOUR_PROJECT_ID"        # Replace with your GCP project ID
 region     = "us-west1"
 zone       = "us-west1-a"
 
 # Domain Configuration
-domain = "davits.store"
+domain = "yourdomain.com"              # Replace with your domain
 
 # Cloudflare Configuration
 # Set CLOUDFLARE_API_TOKEN environment variable: export TF_VAR_cloudflare_api_token="your-api-token"
@@ -13,7 +13,7 @@ domain = "davits.store"
 allowed_countries = ["ES", "AM"] # Spain and Armenia
 
 # Monitoring
-notification_email         = "dav.naz.2001@gmail.com"
+notification_email         = "your-email@example.com"  # Replace with your email
 alert_5xx_threshold        = 5    # 5% of requests
 alert_latency_threshold_ms = 1000 # 1000ms (1 second)
 

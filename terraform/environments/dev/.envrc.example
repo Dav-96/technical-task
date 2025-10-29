@@ -1,0 +1,4 @@
+# Cloudflare API Token
+# Get from: https://dash.cloudflare.com/profile/api-tokens
+# Required permissions: Zone.Zone (Read), Zone.DNS (Edit), Zone.WAF (Edit)
+export TF_VAR_cloudflare_api_token="YOUR_CLOUDFLARE_API_TOKEN"

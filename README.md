@@ -113,20 +113,33 @@ iap.googleapis.com
 
 ## Quick Start
 
-### 1. Setup GCP Authentication
+### 1. Clone and Configure
+
+```bash
+# Clone repository
+git clone https://github.com/YOUR_GITHUB_USER/YOUR_REPO.git
+cd YOUR_REPO
+
+# Copy example configuration files
+cd terraform/environments/dev
+cp terraform.tfvars.example terraform.tfvars
+cp .envrc.example .envrc
+
+# Edit terraform.tfvars with your values:
+# - project_id: Your GCP project ID
+# - domain: Your domain name
+# - notification_email: Your email for alerts
+
+# Edit .envrc with your Cloudflare API token
+# Get token from: https://dash.cloudflare.com/profile/api-tokens
+```
+
+### 2. Setup GCP Authentication
 
 ```bash
 gcloud auth login
 gcloud auth application-default login
 gcloud config set project YOUR_PROJECT_ID
-```
-
-### 2. Configure Cloudflare Token
-
-```bash
-cd terraform/environments/dev
-echo 'export TF_VAR_cloudflare_api_token="your-token"' > .envrc
-source .envrc
 ```
 
 ### 3. Create GCS Backend
@@ -139,6 +152,8 @@ gsutil versioning set on gs://YOUR_PROJECT_ID-terraform-state
 ### 4. Deploy Infrastructure
 
 ```bash
+cd terraform/environments/dev
+source .envrc  # Load Cloudflare token
 terraform init
 terraform apply -auto-approve
 
