@@ -99,12 +99,15 @@ def api():
 
 @app.route('/health')
 def health():
-    conn = get_db_connection()
-    cur = conn.cursor()
-    cur.execute("SELECT 1")
-    cur.close()
-    conn.close()
-    return jsonify({"status": "healthy"})
+    try:
+        conn = get_db_connection()
+        cur = conn.cursor()
+        cur.execute("SELECT 1")
+        cur.close()
+        conn.close()
+        return "ok", 200
+    except Exception as e:
+        return f"unhealthy: {str(e)}", 503
 
 # Initialize database on startup
 init_database()
