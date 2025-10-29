@@ -296,7 +296,12 @@ git push origin main
 ## Cleanup & Cost Prevention
 
 ```bash
-# Destroy all infrastructure (including domain mapping, managed by Terraform)
+# Delete domain mapping first (manual resource)
+gcloud beta run domain-mappings delete YOUR_DOMAIN \
+  --region=us-west1 \
+  --project=YOUR_PROJECT_ID
+
+# Destroy Terraform-managed infrastructure
 cd terraform/environments/dev
 source .envrc  # Load Cloudflare token
 terraform destroy -auto-approve
@@ -305,13 +310,10 @@ terraform destroy -auto-approve
 gcloud compute instances list --project=YOUR_PROJECT_ID
 gcloud run services list --project=YOUR_PROJECT_ID
 gcloud compute disks list --project=YOUR_PROJECT_ID
-gcloud beta run domain-mappings list --region=us-west1 --project=YOUR_PROJECT_ID
 
-# Delete GCS state bucket (optional, if you want complete cleanup)
+# Delete GCS state bucket (optional)
 gsutil -m rm -r gs://YOUR_PROJECT_ID-terraform-state
 ```
-
-**Note**: All resources including Cloud Run domain mapping are now managed by Terraform, so `terraform destroy` handles everything.
 
 ## Cloudflare Configuration
 
