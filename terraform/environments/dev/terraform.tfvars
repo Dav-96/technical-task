@@ -4,7 +4,7 @@ region     = "us-west1"
 zone       = "us-west1-a"
 
 # Domain Configuration
-domain = "davits.store"
+domain = "davits.store" 
 
 # Cloudflare Configuration
 # Set CLOUDFLARE_API_TOKEN environment variable: export TF_VAR_cloudflare_api_token="your-api-token"
