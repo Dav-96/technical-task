@@ -26,7 +26,7 @@ resource "cloudflare_record" "cloud_run_a" {
   name    = "@"
   content = each.value
   type    = "A"
-  proxied = false
+  proxied = true  # Enable Cloudflare proxy for CDN, caching, and security features
   comment = "Cloud Run domain mapping"
 }
 
@@ -56,7 +56,7 @@ resource "cloudflare_ruleset" "geo_allowlist" {
   }
 }
 
-# Cache rules for better performance
+# Cache rules for better performance (5 second TTL for demo)
 resource "cloudflare_page_rule" "cache_everything" {
   zone_id  = data.cloudflare_zone.domain.id
   target   = "${var.domain}/*"
@@ -64,8 +64,8 @@ resource "cloudflare_page_rule" "cache_everything" {
 
   actions {
     cache_level       = "cache_everything"
-    edge_cache_ttl    = 7200
-    browser_cache_ttl = 3600
+    edge_cache_ttl    = 5     # 5 seconds - demonstrates caching while keeping content fresh
+    browser_cache_ttl = 5     # 5 seconds
   }
 }
 

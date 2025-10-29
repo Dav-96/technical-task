@@ -193,9 +193,10 @@ ansible-playbook -i inventory/hosts.ini playbooks/setup-postgres.yml \
 ### 7. Deploy Application (GitHub Actions)
 
 Push to `main` branch triggers:
-1. **terraform.yml**: Infrastructure changes
+1. **terraform.yml**: Infrastructure changes (includes domain mapping + SSL cert provisioning via Terraform)
 2. **deploy-app.yml**: Build → Artifact Registry → Cloud Run
-3. Domain mapping + SSL certificate provisioning
+
+**Note**: Domain mapping and SSL certificate are managed by Terraform (`google_cloud_run_domain_mapping` resource). Certificate provisioning can take 15-60 minutes after first apply.
 
 ## Developer Database Access
 
@@ -286,18 +287,22 @@ git push origin main
 ## Cleanup & Cost Prevention
 
 ```bash
-# Destroy all infrastructure
+# Destroy all infrastructure (including domain mapping, managed by Terraform)
 cd terraform/environments/dev
+source .envrc  # Load Cloudflare token
 terraform destroy -auto-approve
 
 # Verify resources deleted
 gcloud compute instances list --project=YOUR_PROJECT_ID
 gcloud run services list --project=YOUR_PROJECT_ID
 gcloud compute disks list --project=YOUR_PROJECT_ID
+gcloud beta run domain-mappings list --region=us-west1 --project=YOUR_PROJECT_ID
 
-# Delete GCS state bucket (optional)
+# Delete GCS state bucket (optional, if you want complete cleanup)
 gsutil -m rm -r gs://YOUR_PROJECT_ID-terraform-state
 ```
+
+**Note**: All resources including Cloud Run domain mapping are now managed by Terraform, so `terraform destroy` handles everything.
 
 ## Cloudflare Configuration
 
