@@ -56,7 +56,7 @@ resource "cloudflare_ruleset" "geo_allowlist" {
   }
 }
 
-# Cache rules for better performance (5 second TTL for demo)
+# Cache rules for better performance
 resource "cloudflare_page_rule" "cache_everything" {
   zone_id  = data.cloudflare_zone.domain.id
   target   = "${var.domain}/*"
@@ -64,8 +64,8 @@ resource "cloudflare_page_rule" "cache_everything" {
 
   actions {
     cache_level       = "cache_everything"
-    edge_cache_ttl    = 5     # 5 seconds - demonstrates caching while keeping content fresh
-    browser_cache_ttl = 5     # 5 seconds
+    edge_cache_ttl    = 7200  # 2 hours (minimum for Free plan)
+    browser_cache_ttl = 120   # 2 minutes (minimum for Free plan)
   }
 }
 
