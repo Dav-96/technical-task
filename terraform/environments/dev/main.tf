@@ -65,10 +65,10 @@ module "iam" {
 
 # Secret Manager for DB credentials
 module "secrets" {
-  source = "../../modules/secrets"
+  source      = "../../modules/secrets"
   project_id  = var.project_id
   environment = var.environment
-  depends_on = [google_project_service.required_apis]
+  depends_on  = [google_project_service.required_apis]
 }
 
 # Compute Engine VM for PostgreSQL

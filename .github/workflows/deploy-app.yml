@@ -88,7 +88,7 @@ jobs:
           RESPONSE=$(curl -s ${{ steps.get-url.outputs.url }}/health)
           echo "Response: $RESPONSE"
 
-          if echo "$RESPONSE" | grep -q "healthy"; then
+          if echo "$RESPONSE" | grep -q "ok"; then
             echo "✅ Health check passed!"
           else
             echo "❌ Health check failed!"

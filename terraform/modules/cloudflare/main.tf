@@ -63,8 +63,8 @@ resource "cloudflare_page_rule" "cache_everything" {
   priority = 1
 
   actions {
-    cache_level = "cache_everything"
-    edge_cache_ttl = 7200
+    cache_level       = "cache_everything"
+    edge_cache_ttl    = 7200
     browser_cache_ttl = 3600
   }
 }
