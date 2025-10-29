@@ -193,10 +193,19 @@ ansible-playbook -i inventory/hosts.ini playbooks/setup-postgres.yml \
 ### 7. Deploy Application (GitHub Actions)
 
 Push to `main` branch triggers:
-1. **terraform.yml**: Infrastructure changes (includes domain mapping + SSL cert provisioning via Terraform)
+1. **terraform.yml**: Infrastructure changes
 2. **deploy-app.yml**: Build → Artifact Registry → Cloud Run
 
-**Note**: Domain mapping and SSL certificate are managed by Terraform (`google_cloud_run_domain_mapping` resource). Certificate provisioning can take 15-60 minutes after first apply.
+### 8. Create Domain Mapping (Manual - Domain Ownership Required)
+
+```bash
+gcloud beta run domain-mappings create YOUR_DOMAIN \
+  --service=hello-db-app \
+  --region=us-west1 \
+  --project=YOUR_PROJECT_ID
+```
+
+**Why manual?** Requires domain ownership verification via Search Console.
 
 ## Developer Database Access
 
