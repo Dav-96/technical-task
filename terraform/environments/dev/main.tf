@@ -131,19 +131,20 @@ module "cloudflare" {
 }
 
 # Monitoring and Alerting
-# module "monitoring" {
-#   source = "../../modules/monitoring"
+module "monitoring" {
+  source = "../../modules/monitoring"
 
-#   project_id                 = var.project_id
-#   environment                = var.environment
-#   cloud_run_service_name     = module.cloud_run.service_name
-#   domain                     = "${var.subdomain}.${var.domain}"
-#   notification_email         = var.notification_email
-#   alert_5xx_threshold        = var.alert_5xx_threshold
-#   alert_latency_threshold_ms = var.alert_latency_threshold_ms
+  project_id                 = var.project_id
+  region                     = var.region
+  environment                = var.environment
+  cloud_run_service_name     = module.cloud_run.service_name
+  domain                     = var.domain
+  notification_email         = var.notification_email
+  alert_5xx_threshold        = var.alert_5xx_threshold
+  alert_latency_threshold_ms = var.alert_latency_threshold_ms
 
-#   depends_on = [
-#     google_project_service.required_apis,
-#     module.cloud_run
-#   ]
-# }
+  depends_on = [
+    google_project_service.required_apis,
+    module.cloud_run
+  ]
+}

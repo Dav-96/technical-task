@@ -12,14 +12,22 @@ data "cloudflare_zone" "domain" {
   name = var.domain
 }
 
-# DNS record pointing to Cloud Run
-resource "cloudflare_record" "cloud_run" {
+# DNS A records pointing to Cloud Run (for domain mapping)
+# These IPs are provided by GCP when creating domain mapping
+resource "cloudflare_record" "cloud_run_a" {
+  for_each = toset([
+    "216.239.32.21",
+    "216.239.34.21",
+    "216.239.36.21",
+    "216.239.38.21"
+  ])
+
   zone_id = data.cloudflare_zone.domain.id
   name    = "@"
-  content = var.cloud_run_url
-  type    = "CNAME"
+  content = each.value
+  type    = "A"
   proxied = true
-  comment = "Cloud Run service"
+  comment = "Cloud Run domain mapping"
 }
 
 # DNS record for www subdomain
@@ -32,33 +40,20 @@ resource "cloudflare_record" "www" {
   comment = "WWW redirect"
 }
 
-# SSL/TLS configuration - Full (strict)
-resource "cloudflare_zone_settings_override" "security" {
-  zone_id = data.cloudflare_zone.domain.id
+# Firewall rule for geo-restrictions using WAF Custom Rules (Ruleset API)
+resource "cloudflare_ruleset" "geo_allowlist" {
+  zone_id     = data.cloudflare_zone.domain.id
+  name        = "Geo-restriction allowlist"
+  description = "Allow traffic only from Spain and Armenia"
+  kind        = "zone"
+  phase       = "http_request_firewall_custom"
 
-  settings {
-    ssl                      = "full"
-    always_use_https         = "on"
-    automatic_https_rewrites = "on"
-    min_tls_version          = "1.2"
-    tls_1_3                  = "on"
-    http2                    = "on"
-    http3                    = "on"
+  rules {
+    action      = "block"
+    description = "Block all traffic except from ES and AM"
+    expression  = "(ip.geoip.country ne \"ES\" and ip.geoip.country ne \"AM\")"
+    enabled     = true
   }
-}
-
-# Firewall rule for geo-restrictions (allowlist)
-resource "cloudflare_firewall_rule" "geo_allowlist" {
-  zone_id     = data.cloudflare_zone.domain.id
-  description = "Allow traffic only from specific countries"
-  filter_id   = cloudflare_filter.geo_allowlist.id
-  action      = "block"
-}
-
-resource "cloudflare_filter" "geo_allowlist" {
-  zone_id     = data.cloudflare_zone.domain.id
-  description = "Filter for geo-allowlist (block all except allowed countries)"
-  expression  = "not (ip.geoip.country in {${join(" ", [for country in var.allowed_countries : "\"${country}\""])}})"
 }
 
 # Cache rules for better performance

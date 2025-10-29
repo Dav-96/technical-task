@@ -81,10 +81,6 @@ resource "google_monitoring_alert_policy" "high_5xx_rate" {
 
   alert_strategy {
     auto_close = "1800s" # Auto-close after 30 minutes
-
-    notification_rate_limit {
-      period = "300s" # Don't send more than 1 notification per 5 minutes
-    }
   }
 
   documentation {
@@ -161,10 +157,6 @@ resource "google_monitoring_alert_policy" "high_latency" {
 
   alert_strategy {
     auto_close = "1800s"
-
-    notification_rate_limit {
-      period = "300s"
-    }
   }
 
   documentation {
