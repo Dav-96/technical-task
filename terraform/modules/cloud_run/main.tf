@@ -86,7 +86,15 @@ resource "google_cloud_run_domain_mapping" "domain" {
   }
 
   spec {
-    route_name = google_cloud_run_v2_service.app.name
+    route_name       = google_cloud_run_v2_service.app.name
+    certificate_mode = "AUTOMATIC"
+  }
+
+  lifecycle {
+    ignore_changes = [
+      metadata[0].annotations,
+      metadata[0].labels,
+    ]
   }
 
   # Domain mapping depends on DNS records being created first
