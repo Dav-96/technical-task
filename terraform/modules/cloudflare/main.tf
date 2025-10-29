@@ -26,7 +26,7 @@ resource "cloudflare_record" "cloud_run_a" {
   name    = "@"
   content = each.value
   type    = "A"
-  proxied = true
+  proxied = false
   comment = "Cloud Run domain mapping"
 }
 
