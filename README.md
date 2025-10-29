@@ -160,7 +160,27 @@ terraform apply -auto-approve
 # Outputs: VM IP, Cloud Run URL, IAP tunnel command
 ```
 
-### 5. Deploy Database
+### 5. Set Database Password
+
+**CRITICAL**: This step must be completed before deploying the database or application!
+
+```bash
+# Generate a secure password or use your own
+DB_PASSWORD="your-secure-password-here"
+
+# Store password in Secret Manager
+echo -n "$DB_PASSWORD" | gcloud secrets versions add dev-db-password \
+  --data-file=- \
+  --project=YOUR_PROJECT_ID
+
+# Verify it was set correctly
+gcloud secrets versions access latest --secret=dev-db-password \
+  --project=YOUR_PROJECT_ID
+```
+
+> **Note**: Terraform creates Secret Manager secrets with placeholder values. Only the database password needs to be manually set. Other database connection details (host, port, database name, user) are configured as environment variables in the deployment pipeline.
+
+### 6. Deploy Database
 
 ```bash
 cd ../../../ansible
@@ -170,7 +190,7 @@ ansible-playbook -i inventory/hosts.ini playbooks/setup-postgres.yml \
   -e target_zone=us-west1-a
 ```
 
-### 6. Deploy Application (GitHub Actions)
+### 7. Deploy Application (GitHub Actions)
 
 Push to `main` branch triggers:
 1. **terraform.yml**: Infrastructure changes
