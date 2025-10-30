@@ -1,6 +1,12 @@
 name: Setup Database
 
 on:
+  push:
+    branches:
+      - main
+    paths:
+      - 'ansible/**'
+      - '.github/workflows/ansible-database.yml'
   workflow_dispatch:
     inputs:
       action:
@@ -50,7 +56,7 @@ jobs:
         uses: google-github-actions/setup-gcloud@v2
 
       - name: Run Ansible Playbook
-        if: github.event.inputs.action == 'setup'
+        if: github.event.inputs.action == 'setup' || github.event_name == 'push'
         run: |
           cd ansible
           ansible-playbook -i inventory/hosts.ini playbooks/setup-postgres.yml

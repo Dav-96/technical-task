@@ -113,15 +113,7 @@ iap.googleapis.com
 
 ## Quick Start
 
-### Option A: Local Development (Run Terraform Locally)
-
-Follow steps 1-8 below to deploy everything from your laptop.
-
-### Option B: CI/CD with GitHub Actions
-
-For automated deployments via GitHub Actions, complete these **one-time bootstrap steps first**:
-
-#### CI/CD Bootstrap (One-Time Setup)
+### CI/CD Bootstrap (One-Time Setup)
 
 These resources are created manually because they're needed **before** Terraform can run:
 
@@ -145,9 +137,8 @@ for role in \
   "roles/secretmanager.admin" \
   "roles/vpcaccess.admin" \
   "roles/serviceusage.serviceUsageConsumer" \
-  "roles/iam.serviceAccountViewer" \
-  "roles/iam.serviceAccountUser" \
-  "roles/artifactregistry.writer"; do
+  "roles/iam.serviceAccountAdmin" \
+  "roles/artifactregistry.admin"; do
   gcloud projects add-iam-policy-binding YOUR_PROJECT_ID \
     --member="serviceAccount:cicd-github-sa@YOUR_PROJECT_ID.iam.gserviceaccount.com" \
     --role="$role" \
@@ -186,54 +177,42 @@ gcloud iam service-accounts add-iam-policy-binding \
 
 ---
 
-### 1. Clone and Configure
+## Deploy Infrastructure via GitHub Actions
+
+After completing the bootstrap setup above, deploy your infrastructure:
+
+### 1. Configure Terraform Variables
 
 ```bash
-# Clone repository
-git clone https://github.com/YOUR_GITHUB_USER/YOUR_REPO.git
-cd YOUR_REPO
-
-# Copy example configuration files
+# Edit terraform.tfvars with your values
 cd terraform/environments/dev
-cp terraform.tfvars.example terraform.tfvars
-cp .envrc.example .envrc
+vi terraform.tfvars
 
-# Edit terraform.tfvars with your values:
-# - project_id: Your GCP project ID
-# - domain: Your domain name
-# - notification_email: Your email for alerts
-
-# Edit .envrc with your Cloudflare API token
-# Get token from: https://dash.cloudflare.com/profile/api-tokens
 ```
 
-### 2. Setup GCP Authentication
+### 2. Push to GitHub Repository
 
 ```bash
-gcloud auth login
-gcloud auth application-default login
-gcloud config set project YOUR_PROJECT_ID
+# Add all files including .github workflows
+git add .
+git commit -m "Initial infrastructure setup"
+git push origin main
 ```
 
-### 3. Create GCS Backend
+This will trigger the `terraform.yml` workflow which will:
+- Initialize Terraform with GCS backend
+- Run `terraform plan`
+- Run `terraform apply` to create all infrastructure (VPC, VM, Cloud Run, Secrets, Cloudflare, Monitoring)
 
-```bash
-gsutil mb -p YOUR_PROJECT_ID -l us-west1 gs://YOUR_PROJECT_ID-terraform-state
-gsutil versioning set on gs://YOUR_PROJECT_ID-terraform-state
-```
+**Monitor the workflow**: Go to your repository → Actions tab to watch the Terraform deployment.
 
-### 4. Deploy Infrastructure
+---
 
-```bash
-cd terraform/environments/dev
-source .envrc  # Load Cloudflare token
-terraform init
-terraform apply -auto-approve
+## Post-Terraform Deployment Steps
 
-# Outputs: VM IP, Cloud Run URL, IAP tunnel command
-```
+After the Terraform GitHub Actions workflow completes successfully, follow these steps:
 
-### 5. Set Database Password
+### 1. Set Database Password
 
 **CRITICAL**: This step must be completed before deploying the database or application!
 
@@ -253,23 +232,36 @@ gcloud secrets versions access latest --secret=dev-db-password \
 
 > **Note**: Terraform creates Secret Manager secrets with placeholder values. Only the database password needs to be manually set. Other database connection details (host, port, database name, user) are configured as environment variables in the deployment pipeline.
 
-### 6. Deploy Database
+### 2. Deploy Database (Ansible via GitHub Actions)
 
-```bash
-cd ../../../ansible
-ansible-playbook -i inventory/hosts.ini playbooks/setup-postgres.yml \
-  -e target_project=YOUR_PROJECT_ID \
-  -e target_vm=dev-postgres-vm \
-  -e target_zone=us-west1-a
-```
+The Ansible workflow automatically runs when you push changes to the `ansible/` folder.
 
-### 7. Deploy Application (GitHub Actions)
+Since this is your first deployment, the database setup already ran when you pushed your code in the previous step.
 
-Push to `main` branch triggers:
-1. **terraform.yml**: Infrastructure changes
-2. **deploy-app.yml**: Build → Artifact Registry → Cloud Run
+**What the workflow does**:
+- Connects to the VM via Cloud IAP tunnel (no public IP needed)
+- Installs Docker on the VM
+- Pulls PostgreSQL 16-alpine image
+- Creates and starts PostgreSQL container with persistent volume
+- Configures database to use the password from Secret Manager
 
-### 8. Create Domain Mapping (Manual - Domain Ownership Required)
+**To manually trigger** (e.g., for restart or status check):
+- Go to Actions → "Setup Database" → "Run workflow"
+
+### 3. Deploy Application (Automated via GitHub Actions)
+
+The application automatically deploys when you push changes to the `app/` folder.
+
+Since this is your first deployment, the app already deployed when you pushed your code in the previous step.
+
+**What the workflow does**:
+- Builds Docker image from `app/`
+- Pushes to Artifact Registry
+- Deploys to Cloud Run with database connection configured
+
+**Monitor deployments**: Check the Actions tab in your repository.
+
+### 4. Create Domain Mapping (Manual - Domain Ownership Required)
 
 ```bash
 gcloud beta run domain-mappings create YOUR_DOMAIN \
@@ -310,12 +302,17 @@ sudo docker exec -it postgres psql -U postgres
 
 ## CI/CD Workflows
 
-Automated workflows in `.github/workflows/`:
-- **terraform.yml**: Runs `terraform plan` on PRs, `terraform apply` on merges to main
-- **deploy-app.yml**: Builds Docker image, pushes to Artifact Registry, deploys to Cloud Run
-- **ansible-database.yml**: Manual trigger to setup/restart/check database
+All workflows are automated and triggered by file changes:
 
-**Prerequisites**: Complete "CI/CD Prerequisites (One-Time Setup)" section above before workflows can run.
+| Workflow | Trigger | What it does |
+|----------|---------|--------------|
+| **terraform.yml** | Changes to `terraform/**` | Runs `terraform plan` on PRs, `terraform apply` on push to main |
+| **deploy-app.yml** | Changes to `app/**` | Builds Docker image, pushes to Artifact Registry, deploys to Cloud Run |
+| **ansible-database.yml** | Changes to `ansible/**` | Configures PostgreSQL on the VM via Ansible over Cloud IAP |
+
+All workflows can also be manually triggered via the Actions tab → "Run workflow"
+
+**Prerequisites**: Complete "CI/CD Bootstrap (One-Time Setup)" section above before workflows can run.
 
 ## Rollback Procedures
 
