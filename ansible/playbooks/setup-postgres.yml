@@ -24,7 +24,7 @@
 
     - name: Ensure Docker is running
       shell: |
-        gcloud compute ssh {{ target_vm }} \
+        gcloud beta compute ssh {{ target_vm }} \
           --zone={{ target_zone }} \
           --project={{ target_project }} \
           --tunnel-through-iap \
@@ -33,7 +33,7 @@
 
     - name: Pull PostgreSQL Docker image
       shell: |
-        gcloud compute ssh {{ target_vm }} \
+        gcloud beta compute ssh {{ target_vm }} \
           --zone={{ target_zone }} \
           --project={{ target_project }} \
           --tunnel-through-iap \
@@ -41,7 +41,7 @@
 
     - name: Stop existing PostgreSQL container if running
       shell: |
-        gcloud compute ssh {{ target_vm }} \
+        gcloud beta compute ssh {{ target_vm }} \
           --zone={{ target_zone }} \
           --project={{ target_project }} \
           --tunnel-through-iap \
@@ -51,7 +51,7 @@
 
     - name: Run PostgreSQL container
       shell: |
-        gcloud compute ssh {{ target_vm }} \
+        gcloud beta compute ssh {{ target_vm }} \
           --zone={{ target_zone }} \
           --project={{ target_project }} \
           --tunnel-through-iap \
@@ -68,7 +68,7 @@
 
     - name: Wait for PostgreSQL to be ready
       shell: |
-        gcloud compute ssh {{ target_vm }} \
+        gcloud beta compute ssh {{ target_vm }} \
           --zone={{ target_zone }} \
           --project={{ target_project }} \
           --tunnel-through-iap \

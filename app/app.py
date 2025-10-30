@@ -1,6 +1,6 @@
 import os
 import psycopg2
-from flask import Flask, jsonify
+from flask import Flask, jsonify, request
 from google.cloud import secretmanager
 
 app = Flask(__name__)
@@ -14,21 +14,29 @@ PROJECT_ID = os.getenv('GCP_PROJECT_ID')
 
 # Get password from Secret Manager
 def get_db_password():
-    client = secretmanager.SecretManagerServiceClient()
-    secret_path = f"projects/{PROJECT_ID}/secrets/dev-db-password/versions/latest"
-    response = client.access_secret_version(request={"name": secret_path})
-    return response.payload.data.decode('UTF-8')
+    try:
+        client = secretmanager.SecretManagerServiceClient()
+        secret_path = f"projects/{PROJECT_ID}/secrets/dev-db-password/versions/latest"
+        response = client.access_secret_version(request={"name": secret_path})
+        return response.payload.data.decode('UTF-8')
+    except Exception as e:
+        print(f"Failed to get DB password: {e}")
+        return None
 
-DB_PASSWORD = get_db_password()
-
+# Cache the password
+_db_password = None
 
 def get_db_connection():
+    global _db_password
+    if _db_password is None:
+        _db_password = get_db_password()
+
     return psycopg2.connect(
         host=DB_HOST,
         port=DB_PORT,
         database=DB_NAME,
         user=DB_USER,
-        password=DB_PASSWORD
+        password=_db_password
     )
 
 def init_database():
@@ -105,12 +113,26 @@ def health():
         cur.execute("SELECT 1")
         cur.close()
         conn.close()
-        return "ok", 200
+        return jsonify({"status": "ok"}), 200
     except Exception as e:
-        return f"unhealthy: {str(e)}", 503
+        return jsonify({"status": "unhealthy", "error": str(e)}), 503
 
-# Initialize database on startup
-init_database()
+# Initialize database on first request, not on startup
+db_initialized = False
+
+@app.before_request
+def ensure_db_initialized():
+    global db_initialized
+    # Skip database init for health checks
+    if '/health' in request.path or db_initialized:
+        return
+
+    try:
+        init_database()
+        db_initialized = True
+    except Exception as e:
+        # Log error but don't crash - allow health checks to work
+        print(f"Database initialization failed: {e}")
 
 if __name__ == '__main__':
     app.run(host='0.0.0.0', port=8080)
