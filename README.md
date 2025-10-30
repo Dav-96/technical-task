@@ -138,7 +138,8 @@ for role in \
   "roles/vpcaccess.admin" \
   "roles/serviceusage.serviceUsageConsumer" \
   "roles/iam.serviceAccountAdmin" \
-  "roles/artifactregistry.admin"; do
+  "roles/artifactregistry.admin" \
+  "roles/iap.tunnelResourceAccessor"; do
   gcloud projects add-iam-policy-binding YOUR_PROJECT_ID \
     --member="serviceAccount:cicd-github-sa@YOUR_PROJECT_ID.iam.gserviceaccount.com" \
     --role="$role" \
@@ -172,9 +173,6 @@ gcloud iam service-accounts add-iam-policy-binding \
 # WIF_PROVIDER: projects/YOUR_PROJECT_NUMBER/locations/global/workloadIdentityPools/github-pool/providers/github
 # WIF_SERVICE_ACCOUNT: cicd-github-sa@YOUR_PROJECT_ID.iam.gserviceaccount.com
 ```
-
-**Note**: CI/CD SA is NOT in Terraform - it's bootstrap infrastructure created manually once.
-
 ---
 
 ## Deploy Infrastructure via GitHub Actions
@@ -196,15 +194,13 @@ vi terraform.tfvars
 # Add all files including .github workflows
 git add .
 git commit -m "Initial infrastructure setup"
-git push origin main
+git push origin <Branch>
 ```
 
 This will trigger the `terraform.yml` workflow which will:
 - Initialize Terraform with GCS backend
 - Run `terraform plan`
 - Run `terraform apply` to create all infrastructure (VPC, VM, Cloud Run, Secrets, Cloudflare, Monitoring)
-
-**Monitor the workflow**: Go to your repository → Actions tab to watch the Terraform deployment.
 
 ---
 
@@ -259,8 +255,6 @@ Since this is your first deployment, the app already deployed when you pushed yo
 - Pushes to Artifact Registry
 - Deploys to Cloud Run with database connection configured
 
-**Monitor deployments**: Check the Actions tab in your repository.
-
 ### 4. Create Domain Mapping (Manual - Domain Ownership Required)
 
 ```bash
@@ -272,22 +266,33 @@ gcloud beta run domain-mappings create YOUR_DOMAIN \
 
 **Why manual?** Requires domain ownership verification via Search Console.
 
-## Developer Database Access
+## Cloudflare Configuration
 
-### IAP TCP Forwarding (Recommended)
-
-```bash
-# Forward PostgreSQL port to localhost
-gcloud compute start-iap-tunnel dev-postgres-vm 5432 \
-  --local-host-port=localhost:5432 \
-  --zone=us-west1-a \
-  --project=YOUR_PROJECT_ID
-
-# Connect with psql
-psql -h localhost -p 5432 -U postgres -d postgres
+**DNS Records** (managed by Terraform):
+```
+yourdomain.com  A    216.239.32.21  (Proxied)
+yourdomain.com  A    216.239.34.21  (Proxied)
+yourdomain.com  A    216.239.36.21  (Proxied)
+yourdomain.com  A    216.239.38.21  (Proxied)
+www             CNAME yourdomain.com  (Proxied)
 ```
 
-### Direct SSH
+Note: These are Google's global anycast IPs for Cloud Run domain mappings
+
+**WAF Rule** (Terraform `cloudflare_ruleset`):
+```
+Expression: (ip.geoip.country ne "ES" and ip.geoip.country ne "AM")
+Action: Block
+```
+
+**Caching**:
+- `/*`: Cache everything, edge TTL 2h, browser TTL 1h
+- `/api*`: Bypass cache
+- SSL/TLS: Full (not strict, Cloud Run uses Google certs)
+
+## Developer Database Access
+
+### SSH via IAP
 
 ```bash
 # SSH via IAP
@@ -312,7 +317,6 @@ All workflows are automated and triggered by file changes:
 
 All workflows can also be manually triggered via the Actions tab → "Run workflow"
 
-**Prerequisites**: Complete "CI/CD Bootstrap (One-Time Setup)" section above before workflows can run.
 
 ## Rollback Procedures
 
@@ -362,27 +366,3 @@ gcloud compute disks list --project=YOUR_PROJECT_ID
 # Delete GCS state bucket (optional)
 gsutil -m rm -r gs://YOUR_PROJECT_ID-terraform-state
 ```
-
-## Cloudflare Configuration
-
-**DNS Records** (managed by Terraform):
-```
-yourdomain.com  A    216.239.32.21  (Proxied)
-yourdomain.com  A    216.239.34.21  (Proxied)
-yourdomain.com  A    216.239.36.21  (Proxied)
-yourdomain.com  A    216.239.38.21  (Proxied)
-www             CNAME yourdomain.com  (Proxied)
-```
-
-Note: These are Google's global anycast IPs for Cloud Run domain mappings
-
-**WAF Rule** (Terraform `cloudflare_ruleset`):
-```
-Expression: (ip.geoip.country ne "ES" and ip.geoip.country ne "AM")
-Action: Block
-```
-
-**Caching**:
-- `/*`: Cache everything, edge TTL 2h, browser TTL 1h
-- `/api*`: Bypass cache
-- SSL/TLS: Full (not strict, Cloud Run uses Google certs)
