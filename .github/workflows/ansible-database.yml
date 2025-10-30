@@ -55,6 +55,10 @@ jobs:
       - name: Set up Cloud SDK
         uses: google-github-actions/setup-gcloud@v2
 
+      - name: Install gcloud beta components
+        run: |
+          gcloud components install beta --quiet
+
       - name: Run Ansible Playbook
         if: github.event.inputs.action == 'setup' || github.event_name == 'push'
         run: |
@@ -63,7 +67,7 @@ jobs:
 
       - name: Check Database Status
         run: |
-          gcloud compute ssh ${{ env.VM_NAME }} \
+          gcloud beta compute ssh ${{ env.VM_NAME }} \
             --zone=${{ env.ZONE }} \
             --project=${{ env.PROJECT_ID }} \
             --tunnel-through-iap \
