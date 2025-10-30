@@ -115,16 +115,6 @@ variable "service_accounts" {
         "roles/secretmanager.secretAccessor"
       ]
     }
-    cicd = {
-      account_id   = "cicd-github-sa"
-      display_name = "CI/CD Service Account"
-      description  = "Service account for GitHub Actions CI/CD pipeline"
-      roles = [
-        "roles/artifactregistry.writer",
-        "roles/run.developer",
-        "roles/secretmanager.secretAccessor"
-      ]
-    }
   }
 }
 
@@ -134,10 +124,5 @@ variable "sa_impersonations" {
     source_sa = string
     target_sa = string
   }))
-  default = {
-    cicd_can_use_cloudrun = {
-      source_sa = "cicd"
-      target_sa = "cloudrun"
-    }
-  }
+  default = {}
 }
