@@ -113,6 +113,79 @@ iap.googleapis.com
 
 ## Quick Start
 
+### Option A: Local Development (Run Terraform Locally)
+
+Follow steps 1-8 below to deploy everything from your laptop.
+
+### Option B: CI/CD with GitHub Actions
+
+For automated deployments via GitHub Actions, complete these **one-time bootstrap steps first**:
+
+#### CI/CD Bootstrap (One-Time Setup)
+
+These resources are created manually because they're needed **before** Terraform can run:
+
+```bash
+# 1. Create GCS bucket for Terraform state
+gsutil mb -p YOUR_PROJECT_ID -l us-west1 gs://YOUR_PROJECT_ID-terraform-state
+gsutil versioning set on gs://YOUR_PROJECT_ID-terraform-state
+
+# 2. Create CI/CD service account
+gcloud iam service-accounts create cicd-github-sa \
+  --display-name="CI/CD Service Account" \
+  --description="Service account for GitHub Actions CI/CD pipeline" \
+  --project=YOUR_PROJECT_ID
+
+# 3. Grant CI/CD SA all required roles
+for role in \
+  "roles/run.admin" \
+  "roles/compute.admin" \
+  "roles/monitoring.admin" \
+  "roles/resourcemanager.projectIamAdmin" \
+  "roles/secretmanager.admin" \
+  "roles/vpcaccess.admin" \
+  "roles/serviceusage.serviceUsageConsumer" \
+  "roles/iam.serviceAccountViewer" \
+  "roles/iam.serviceAccountUser" \
+  "roles/artifactregistry.writer"; do
+  gcloud projects add-iam-policy-binding YOUR_PROJECT_ID \
+    --member="serviceAccount:cicd-github-sa@YOUR_PROJECT_ID.iam.gserviceaccount.com" \
+    --role="$role" \
+    --condition=None
+done
+
+# 4. Grant CI/CD SA access to GCS state bucket
+gsutil iam ch serviceAccount:cicd-github-sa@YOUR_PROJECT_ID.iam.gserviceaccount.com:roles/storage.objectAdmin \
+  gs://YOUR_PROJECT_ID-terraform-state
+
+# 5. Create Workload Identity Federation pool and provider
+gcloud iam workload-identity-pools create github-pool \
+  --location=global \
+  --project=YOUR_PROJECT_ID
+
+gcloud iam workload-identity-pools providers create-oidc github \
+  --location=global \
+  --workload-identity-pool=github-pool \
+  --issuer-uri=https://token.actions.githubusercontent.com \
+  --attribute-mapping="google.subject=assertion.sub,attribute.repository=assertion.repository" \
+  --project=YOUR_PROJECT_ID
+
+# 6. Bind WIF to CI/CD service account
+gcloud iam service-accounts add-iam-policy-binding \
+  cicd-github-sa@YOUR_PROJECT_ID.iam.gserviceaccount.com \
+  --role=roles/iam.workloadIdentityUser \
+  --member="principalSet://iam.googleapis.com/projects/YOUR_PROJECT_NUMBER/locations/global/workloadIdentityPools/github-pool/attribute.repository/YOUR_GITHUB_USER/YOUR_REPO" \
+  --project=YOUR_PROJECT_ID
+
+# 7. Add GitHub repository secrets (Settings → Secrets and variables → Actions):
+# WIF_PROVIDER: projects/YOUR_PROJECT_NUMBER/locations/global/workloadIdentityPools/github-pool/providers/github
+# WIF_SERVICE_ACCOUNT: cicd-github-sa@YOUR_PROJECT_ID.iam.gserviceaccount.com
+```
+
+**Note**: CI/CD SA is NOT in Terraform - it's bootstrap infrastructure created manually once.
+
+---
+
 ### 1. Clone and Configure
 
 ```bash
@@ -237,34 +310,12 @@ sudo docker exec -it postgres psql -U postgres
 
 ## CI/CD Workflows
 
-### Workload Identity Federation Setup (One-time)
+Automated workflows in `.github/workflows/`:
+- **terraform.yml**: Runs `terraform plan` on PRs, `terraform apply` on merges to main
+- **deploy-app.yml**: Builds Docker image, pushes to Artifact Registry, deploys to Cloud Run
+- **ansible-database.yml**: Manual trigger to setup/restart/check database
 
-```bash
-# Create WIF pool and provider
-gcloud iam workload-identity-pools create github-actions \
-  --location=global --project=YOUR_PROJECT_ID
-
-gcloud iam workload-identity-pools providers create-oidc github \
-  --location=global --workload-identity-pool=github-actions \
-  --issuer-uri=https://token.actions.githubusercontent.com \
-  --attribute-mapping="google.subject=assertion.sub,attribute.repository=assertion.repository" \
-  --project=YOUR_PROJECT_ID
-
-# Bind service account
-gcloud iam service-accounts add-iam-policy-binding \
-  cicd-github-sa@YOUR_PROJECT_ID.iam.gserviceaccount.com \
-  --role=roles/iam.workloadIdentityUser \
-  --member="principalSet://iam.googleapis.com/projects/YOUR_PROJECT_NUMBER/locations/global/workloadIdentityPools/github-actions/attribute.repository/YOUR_GITHUB_USER/YOUR_REPO" \
-  --project=YOUR_PROJECT_ID
-```
-
-### GitHub Secrets Required
-
-```
-WIF_PROVIDER: projects/YOUR_PROJECT_NUMBER/locations/global/workloadIdentityPools/github-actions/providers/github
-WIF_SERVICE_ACCOUNT: cicd-github-sa@YOUR_PROJECT_ID.iam.gserviceaccount.com
-CLOUDFLARE_API_TOKEN: (your cloudflare api token)
-```
+**Prerequisites**: Complete "CI/CD Prerequisites (One-Time Setup)" section above before workflows can run.
 
 ## Rollback Procedures
 
