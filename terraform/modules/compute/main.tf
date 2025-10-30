@@ -47,7 +47,7 @@ resource "google_compute_instance" "postgres_vm" {
 
   # Metadata for SSH and startup script
   metadata = {
-    enable-oslogin = "TRUE"
+    enable-oslogin = "FALSE"
     # Startup script to install basic dependencies
     # Ansible will handle the actual PostgreSQL setup
     startup-script = <<-EOF
